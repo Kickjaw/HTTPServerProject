@@ -43,9 +43,15 @@ func (cfg *apiConfig) Chirp(w http.ResponseWriter, r *http.Request) {
 
 	cleanedBody := removeProfanity(params.Body)
 
+	UserIDUUID, err := uuid.Parse(params.UserID)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "UUID is incorrect", err)
+		return
+	}
+
 	chirpRaw, err := cfg.db.WriteChirpToDB(r.Context(), database.WriteChirpToDBParams{
 		Body:   cleanedBody,
-		UserID: params.UserID,
+		UserID: UserIDUUID,
 	})
 
 	if err != nil {
@@ -59,7 +65,7 @@ func (cfg *apiConfig) Chirp(w http.ResponseWriter, r *http.Request) {
 			CreatedAt: chirpRaw.CreatedAt,
 			UpdatedAt: chirpRaw.UpdatedAt,
 			Body:      chirpRaw.Body,
-			UserID:    chirpRaw.UserID,
+			UserID:    chirpRaw.UserID.String(),
 		},
 	})
 }
@@ -89,7 +95,7 @@ func (cfg *apiConfig) getAllChirps(w http.ResponseWriter, r *http.Request) {
 			CreatedAt: chirp.CreatedAt,
 			UpdatedAt: chirp.UpdatedAt,
 			Body:      chirp.Body,
-			UserID:    chirp.UserID,
+			UserID:    chirp.UserID.String(),
 		}
 		chirpsResponse = append(chirpsResponse, chirpFormatted)
 	}
@@ -123,7 +129,7 @@ func (cfg *apiConfig) getChirpByID(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: chirpRaw.CreatedAt,
 		UpdatedAt: chirpRaw.UpdatedAt,
 		Body:      chirpRaw.Body,
-		UserID:    chirpRaw.UserID,
+		UserID:    chirpRaw.UserID.String(),
 	},
 	})
 }

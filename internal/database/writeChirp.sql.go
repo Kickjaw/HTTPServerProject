@@ -7,6 +7,8 @@ package database
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 const writeChirpToDB = `-- name: WriteChirpToDB :one
@@ -23,7 +25,7 @@ RETURNING id, created_at, updated_at, body, user_id
 
 type WriteChirpToDBParams struct {
 	Body   string
-	UserID string
+	UserID uuid.UUID
 }
 
 func (q *Queries) WriteChirpToDB(ctx context.Context, arg WriteChirpToDBParams) (Chirp, error) {

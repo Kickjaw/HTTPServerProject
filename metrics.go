@@ -31,10 +31,3 @@ func (cfg *apiConfig) severMetrics(w http.ResponseWriter, r *http.Request) {
 	`, hits)))
 
 }
-
-func (cfg *apiConfig) resetServerHits(w http.ResponseWriter, r *http.Request) {
-	cfg.fileserverHits.Store(int32(0))
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Hits reset to 0"))
-
-}
