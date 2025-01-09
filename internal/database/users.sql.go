@@ -7,6 +7,9 @@ package database
 
 import (
 	"context"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 const createUser = `-- name: CreateUser :one
@@ -18,7 +21,7 @@ VALUES (
     $1, 
     $2
 )
-RETURNING id, created_at, updated_at, email, hashed_password
+RETURNING id, created_at, updated_at, email, hashed_password, is_chirpy_red
 `
 
 type CreateUserParams struct {
@@ -35,6 +38,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.UpdatedAt,
 		&i.Email,
 		&i.HashedPassword,
+		&i.IsChirpyRed,
 	)
 	return i, err
 }
@@ -48,8 +52,30 @@ func (q *Queries) DeleteUser(ctx context.Context) error {
 	return err
 }
 
+const findRefreshToken = `-- name: FindRefreshToken :one
+SELECT users.id, users.created_at, users.updated_at, users.email, users.hashed_password, users.is_chirpy_red FROM users
+JOIN refresh_tokens ON users.id = refresh_tokens.user_id
+WHERE refresh_tokens.token = $1
+AND revoked_at IS NULL
+AND expires_at > NOW()
+`
+
+func (q *Queries) FindRefreshToken(ctx context.Context, token string) (User, error) {
+	row := q.db.QueryRowContext(ctx, findRefreshToken, token)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Email,
+		&i.HashedPassword,
+		&i.IsChirpyRed,
+	)
+	return i, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
-select id, created_at, updated_at, email, hashed_password from users
+select id, created_at, updated_at, email, hashed_password, is_chirpy_red from users
 where email = $1
 `
 
@@ -62,6 +88,89 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.UpdatedAt,
 		&i.Email,
 		&i.HashedPassword,
+		&i.IsChirpyRed,
 	)
 	return i, err
+}
+
+const insertRefreshToken = `-- name: InsertRefreshToken :one
+INSERT INTO refresh_tokens(token, created_at, updated_at, user_id, expires_at,revoked_at)
+VALUES(
+    $1,
+    NOW(),
+    NOW(),
+    $2,
+    $3,
+    NULL
+)
+RETURNING token, created_at, updated_at, user_id, expires_at, revoked_at
+`
+
+type InsertRefreshTokenParams struct {
+	Token     string
+	UserID    uuid.UUID
+	ExpiresAt time.Time
+}
+
+func (q *Queries) InsertRefreshToken(ctx context.Context, arg InsertRefreshTokenParams) (RefreshToken, error) {
+	row := q.db.QueryRowContext(ctx, insertRefreshToken, arg.Token, arg.UserID, arg.ExpiresAt)
+	var i RefreshToken
+	err := row.Scan(
+		&i.Token,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.UserID,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const revokeRefreshToke = `-- name: RevokeRefreshToke :exec
+update refresh_tokens
+set revoked_at = NOW(), updated_at = Now()
+where token = $1
+`
+
+func (q *Queries) RevokeRefreshToke(ctx context.Context, token string) error {
+	_, err := q.db.ExecContext(ctx, revokeRefreshToke, token)
+	return err
+}
+
+const updateEmailAndPassword = `-- name: UpdateEmailAndPassword :one
+update users
+set email = $2, hashed_password = $3, updated_at = NOW()
+where id = $1
+RETURNING id, created_at, updated_at, email, hashed_password, is_chirpy_red
+`
+
+type UpdateEmailAndPasswordParams struct {
+	ID             uuid.UUID
+	Email          string
+	HashedPassword string
+}
+
+func (q *Queries) UpdateEmailAndPassword(ctx context.Context, arg UpdateEmailAndPasswordParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateEmailAndPassword, arg.ID, arg.Email, arg.HashedPassword)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Email,
+		&i.HashedPassword,
+		&i.IsChirpyRed,
+	)
+	return i, err
+}
+
+const upgradeUser = `-- name: UpgradeUser :exec
+update users
+set is_chirpy_red = 'TRUE', updated_at = NOW()
+where id = $1
+`
+
+func (q *Queries) UpgradeUser(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, upgradeUser, id)
+	return err
 }

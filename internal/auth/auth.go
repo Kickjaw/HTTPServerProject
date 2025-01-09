@@ -1,7 +1,11 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -30,7 +34,7 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(expiresIn)),
 		Subject:   userID.String(),
 	})
-	signed, err := token.SignedString(tokenSecret)
+	signed, err := token.SignedString([]byte(tokenSecret))
 	if err != nil {
 		return "", err
 	}
@@ -61,4 +65,38 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 	}
 
 	return userID, nil
+}
+
+func GetBearerToken(headers http.Header) (string, error) {
+	authHeader := headers.Get("Authorization")
+	if authHeader == "" {
+		return "", errors.New("no authorization token found in header")
+	}
+	token, found := strings.CutPrefix(authHeader, "Bearer ")
+	if !found {
+		return "", errors.New("imporper authorization string format")
+	}
+	return token, nil
+}
+
+func MakeRefreshToken() (string, error) {
+	randomBytes := make([]byte, 32)
+	_, err := rand.Read(randomBytes)
+	if err != nil {
+		return "", errors.New("error generating random data")
+	}
+	token := hex.EncodeToString(randomBytes)
+	return token, nil
+}
+
+func GetAPIKey(headers http.Header) (string, error) {
+	authHeader := headers.Get("Authorization")
+	if authHeader == "" {
+		return "", errors.New("no api key found in header")
+	}
+	apiKey, found := strings.CutPrefix(authHeader, "ApiKey ")
+	if !found {
+		return "", errors.New("imporper ApiKey string format")
+	}
+	return apiKey, nil
 }
